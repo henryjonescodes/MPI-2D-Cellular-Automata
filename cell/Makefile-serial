@@ -1,0 +1,19 @@
+CC=gcc
+CFLAGS=-I.
+DEPS = 
+OBJ = CellAut.o 2DCellAut.o
+
+%.o: %.c $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+run2dcell: $(OBJ) run2dcell.o
+	$(CC) -o $@ $^ $(CFLAGS)
+
+runcell: $(OBJ) runcell.o
+	$(CC) -o $@ $^ $(CFLAGS)
+
+runcellmp: $(OBJ) runcell.o
+	$(CC) -fopenmp -o $@ $^ $(CFLAGS) 
+
+clean:
+	rm -f *.o *~ 
