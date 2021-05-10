@@ -1,14 +1,16 @@
 CC=mpicc
 CFLAGS=-I.
-DEPS = 
-OBJ = mpicell.o CellAut.o 2DCellAut.o
+DEPS =
+OBJ = mpicell2d.o CellAut.o 2DCellAut.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-mpicell: $(OBJ)
+# mpicell: $(OBJ)
+# 	$(CC) -o $@ $^ $(CFLAGS)
+
+mpicell2d: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
-
 clean:
-	rm -f *.o *~ 
+	rm -f *.o *~
