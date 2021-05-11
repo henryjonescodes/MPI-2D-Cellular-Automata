@@ -12,9 +12,9 @@ char *MakeRandomRuleSet()
       for (i = 0; i < RULESETSIZE; i++){
         //either a 0 or a 1
         outset[i]  = rand()%2;
-        printf("%d",outset[i]);
+        // printf("%d",outset[i]);
       }
-      printf("\n");
+      // printf("\n");
       return outset;
 
   }
