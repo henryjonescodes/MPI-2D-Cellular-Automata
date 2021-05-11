@@ -22,6 +22,8 @@ int main(int argc, char *argv[])
   int my_rank;               /* Process rank */
   int comm_sz;                /* Number of processes */
   int worldsize;
+  int iterations = 24;
+  int curriter = 0;
 
   MPI_Init (&argc, &argv);
   MPI_Comm_rank (MPI_COMM_WORLD, &my_rank);
@@ -29,9 +31,13 @@ int main(int argc, char *argv[])
 
   if (argc > 1) {
     worldsize = atoi(argv[1]);
+    if(argc > 2){
+      iterations = atoi(argv[2]);
+    }
   }
   else{
     printf("usage: runcell <worldsize>\n");
+    printf("usage: runcell <worldsize> <iterations\n");
     exit(1);
   }
 
@@ -48,15 +54,15 @@ int main(int argc, char *argv[])
   //Root process makes the random rule, broadcasts
   if(my_rank == 0){
       ruleset = MakeRandomRuleSet();
-      printf("(%d): ", my_rank);
+      printf("(%d): Ruleset", my_rank);
       printRuleset(ruleset,RULESETSIZE);
   }
 
   MPI_Bcast(ruleset, RULESETSIZE, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-  printf("(%d): ", my_rank);
-  printRuleset(ruleset,RULESETSIZE);
-  printf("\n");
+  // printf("(%d): ", my_rank);
+  // printRuleset(ruleset,RULESETSIZE);
+  // printf("\n");
 
   //Each processor makes their own world slice (complete rows, partial height worlds)
 
@@ -65,13 +71,29 @@ int main(int argc, char *argv[])
 
   //Each processor sends its top and bottom rows to the appropriate places
 
-  
+
 
   //Each processor runs the rule, producing a new slice
 
+
+  Run2DCellWorldOnce(mycellworld, slicesize, worldsize, my_rank, ruleset);
+  print2DWorld(mycellworld,slicesize,worldsize,my_rank);
+
+  // for(curriter = 0; curriter < iterations; curriter ++){
+  //   Run2DCellWorldOnce(mycellworld, slicesize, worldsize, my_rank, ruleset);
+  // }
+
+
   //Task 0 gathers slices and prints
 
+  char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
+  int count = slicesize*worldsize;
 
+  MPI_Gather(mycellworld,count, MPI_CHAR, bigcellworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
+
+  if(my_rank == 0){
+    print2DWorld(bigcellworld,worldsize,worldsize,my_rank);
+  }
 
   MPI_Finalize();
 }

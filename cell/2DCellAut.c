@@ -26,12 +26,12 @@ char * Make2DCellWorld(int rows,int cols)
     printf("Memory allocation error!");
     return NULL;
   }
-//int i;
+int i;
 
- // for (i = 0; i < rows*cols; i++){
-    //either a 0 or a 1
-  //  outworld[i]  = rand()%2;
-//  }
+  for (i = 0; i < rows*cols; i++){
+      // either a 0 or a 1
+     outworld[i]  = rand()%2;
+  }
   return outworld;
 }
 
@@ -189,5 +189,24 @@ void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
       world = newworld;
       newworld = oldworld;
     }
+  free(newworld);
+}
+
+void Run2DCellWorldOnce(char *world, int rows, int cols, int myid, char *ruleset)
+{
+
+  char *newworld= Make2DCellWorld(rows,cols);
+  int loc;
+  print2DWorld(world, rows,cols,0);
+  for (loc = 0; loc < rows*cols ; loc++){
+      Apply2DRuleAtLoc(world,newworld,loc,rows,cols,ruleset);
+  }
+
+  // the world becomes the new world
+  // and new world becomes the old world
+  // (this way we only have to allocate the array once)
+  char *oldworld = world;
+  world = newworld;
+  newworld = oldworld;
   free(newworld);
 }

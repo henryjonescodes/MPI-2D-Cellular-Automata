@@ -21,4 +21,6 @@ void ApplyRuleAtLoc(int *oldworld, int *newworld, int loc,int worldsize, int rul
 //MPI-capable version of printWorld, takes id as input
 void print2DWorld(char* world, int rows, int cols, int myid);
 
+void Run2DCellWorldOnce(char *world, int rows, int cols, int myid, char *ruleset);
+
 //and now 2D versions
