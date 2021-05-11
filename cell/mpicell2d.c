@@ -1,175 +1,240 @@
+#include "2DCellAut.h"
+#include "mpi.h"
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include "CellAut.h"
-#include "mpi.h"
-/* mpicell.c
- author: John Rieffel
-*/
 
 
-// We need to get values from our neighbors, and send values to our neighbors
-// how to do it without deadlock?
-// MPI_Send is non-blocking, except when it isn't
+char *MakeRandomRuleSet()
+  {
+      char *outset;
+      if ((outset = calloc(RULESETSIZE,sizeof(char))) == NULL) {
+        printf("Memory allocation error!");
+        return NULL;
+      }
+      int i;
+      for (i = 0; i < RULESETSIZE; i++){
+        //either a 0 or a 1
+        outset[i]  = rand()%2;
+        printf("%d",outset[i]);
+      }
+      printf("\n");
+      return outset;
+
+  }
+// Makes a 2D cell world of size ROW*COLS, and randomly fills it with 0s and 1s
+char * Make2DCellWorld(int rows,int cols)
+{
+  char *outworld;
+  if ((outworld = calloc(rows*cols,sizeof(char))) == NULL) {
+    printf("Memory allocation error!");
+    return NULL;
+  }
+//int i;
+
+ // for (i = 0; i < rows*cols; i++){
+    //either a 0 or a 1
+  //  outworld[i]  = rand()%2;
+//  }
+  return outworld;
+}
+
+//put a 1 in the middle
+void Init2DCellWorld(char* inworld,int numrows,int numcols)
+{
+//  inworld[(int)(numcols*numrows/2) + (int)(numcols/2)] = 1;
+int i;
+for (i = 0; i < numrows*numcols; i++){
+    //either a 0 or a 1
+    inworld[i]  = rand()%2;
+  }
+}
+
+//given a location in a 2D cell world
+//find the neighbhord composed of that cell and its immediate neighbors
+//and converts that neighbhoord into a binary number
+// for instance, if your hood looks like this:
+//   000
+//   000   <- middle 0 is loc
+//   000
 //
-// When this function returns,
-// leftval should contain the value sent by your left neighbor
-// and rightval should contain the value sent by your right neighbor
+// then this becomes index 0
+// whereas if your hood looks like this:
+//
+// 000
+// 001
+// 111
+//
+// that becomes  000001111, which is index 15
+//etc.
 
-void DistributeLeftAndRightVals(int myID, int numprocs, int *mylocalcells, int localsize, int *leftval, int *rightval)
+int MakeIndexFromHood(char *world, int loc, int rows, int cols)
 {
-   int rightID=(myID+1)%numprocs;  //neighbor to your right
-   int leftID=(myID-1+numprocs)%numprocs; //neighbor to your left
+  char NW,NN,NE,WW,CC,EE,SW,SS,SE;
 
-   int myfirst = mylocalcells[0];
-   int mylast = mylocalcells[localsize-3]; //note that we have to extra cells of padding.
+  int rownum = (int)loc/cols; //this truncates to the floor
+  int colnum = loc%cols;
 
-   MPI_Status status;
+  int northrow = ((rownum - 1) >= 0) ? rownum-1 : rows-1;
+  int southrow = ((rownum + 1) < rows) ? rownum+1 : 0;
+  int eastcol = ((colnum + 1) < cols) ? colnum+1 : 0;
+  int westcol = ((colnum - 1) >= 0) ? colnum-1 : cols-1;
+  NW = world[northrow*cols + westcol];
+  NN = world[northrow*cols + colnum];
+  NE = world[northrow*cols + eastcol];
+  EE = world[rownum*cols + eastcol];
+  CC = world[loc];
+  WW = world[rownum*cols + westcol];
+  SW = world[southrow*cols + westcol];
+  SS = world[southrow*cols + colnum];
+  SE = world[southrow*cols + eastcol];
 
-   //CSC-333 inclass: put communication in here!
-	// STEP TWO
-  //replace these lines below with your correct communications
-   *leftval = 0;
-   *rightval = 0;
-   // printf("I am node %d, I got %d from left node %d and %d from right node %d\n", myID,*leftval,leftID,*rightval,rightID);
+
+//0 0110 0110
+  //int index = NW<<8 | NN << 7 | NE < 6 | WW << 5 | CC << 4 | EE << 3 | SW << 2 | SS << 1 | SE;
+  int index = (int)(ALIGN_BIT(NW,8) |
+              ALIGN_BIT(NN,7) |
+              ALIGN_BIT(NE,6) |
+              ALIGN_BIT(WW,5) |
+              ALIGN_BIT(CC,4) |
+              ALIGN_BIT(EE,3) |
+              ALIGN_BIT(SW,2) |
+              ALIGN_BIT(SS,1) |
+              ALIGN_BIT(SE,0)) ;
+  //for testing
+  //printf("hood at %d\n[%d%d%d\n %d%d%d\n %d%d%d] --> %x\n", loc,NW,NN,NE,WW,CC,EE,SW,SS,SE,index);
+
+  return index;
 
 }
+//
+ void Apply2DRuleAtLoc(char *world, char *newworld,int loc, int rows, int cols, char *ruleset)
+ {
+   int curIndex = MakeIndexFromHood(world, loc, rows, cols);
+   //do some other stuff here
+   //CSC333 - PROJECT - CHANGE THIS line
+   // so that newworld[loc] actually becomes
+   // whathever the ruleset tells you.
+   newworld[loc] = world[loc];
 
-void MPIRunCellWorld(int myID, int numprocs, int *localcells, int sizeOfMyWorld, int iterations, int rule)
+   return;
+
+ }
+
+void print2DWorld(char *world, int rows, int cols, int myid)
 {
-   int leftval = 0;
-   int rightval = 0;
-   int *newcells = MakeCellWorld(sizeOfMyWorld);
+  int rownum, colnum;
 
-  int itercount = 0;
-  for (itercount = 0; itercount < iterations; itercount++)
-     {
-             // printf("node %d before rules\n",myID);
-             // printWorld(localcells,localsize,myID);
-      // after calling this
-      // the variables leftval and rightval
-      // should have the values from the neighboring worlds.
-       DistributeLeftAndRightVals(myID,numprocs, localcells, sizeOfMyWorld, &leftval, &rightval);
+  printf("(%d):\n",myid);
+  for (rownum = 0; rownum < rows ; rownum++) {
+      for (colnum= 0; colnum < cols ; colnum++){
 
+  	printf("%d",world[rownum*cols + colnum]) ;
+      }
+  	printf("\n");
 
-       // shouldn't have to touch this, it should just work
-       // Assuming we've padded localworld with two extra indexes
-       //We can put the right neigbhor's value at the second to last index
-       // and the left neighbor's value at the last index
-       //
-       // i.e. if size of localworld L is actually five (5)
-       // index: 0     1    2    3    4    5  6
-       //       L[0] L[1] L[2] L[3] L[4]   R  L
-       // and then if we treat the array as a torus/ring, the math works
-       // with the same function as the serial version.
-       localcells[sizeOfMyWorld-2] = rightval;
-       localcells[sizeOfMyWorld-1] = leftval;
-       int locali = 0;
-       for (locali = 0; locali < sizeOfMyWorld; locali++) {
-	        ApplyRuleAtLoc(localcells,newcells,locali,sizeOfMyWorld,rule);
-        }
-       // the world becomes the new world
-       // and new world becomes the old world
-       // (this way we only have to allocate the array once)
-       memcpy((void *)localcells,(void *)newcells,sizeOfMyWorld*sizeof(int));
-
-     }
-     free(newcells);
-
+      //if (world[i] != Nil){
+    //    if (world[i] == 1) printf("#");
+     //   else printf(" ");
+       //}
+    }
+  printf("\n");
 }
+//
+// //serial version of run 2d cell world
+
+/* "rules" no longer fit into integers.
+ We need a 512-bit RULESET, because there are 2^9 possible neighborhoods, and
+ our ruleset needs to specify what to do in each case.  We can use the fingerprint
+ of the neighborhood as an "index" into the ruleset.  For instance:
+
+ The neighborhood
+
+ 000
+ 000      (the center is zero and surrounded by zeroes)
+ 000
+
+ would have index 000000000 and the rule to apply would be found at index 0 of the ruleset.
+
+ whereas the neighborhood:
+
+ 000
+ 000 (the center is zero and surrounded by zeroes
+ 001  except for the southeast neighbor, which is 1)
+
+would have index  000000001, and the rule to apply would be found at index 1 of the ruleset.
+
+and the neighborhood
+
+101
+010
+101
+
+would have index 101010101, and the rule would be found at index 341 (0x155) of the ruleset
+
+ */
+void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
+{
+
+  char *newworld= Make2DCellWorld(rows,cols);
+
+  while(1)
+    {
+      int loc;
+      print2DWorld(world, rows,cols,0);
+      for (loc = 0; loc < rows*cols ; loc++){
+	        Apply2DRuleAtLoc(world,newworld,loc,rows,cols,ruleset);
+      }
+
+      // the world becomes the new world
+      // and new world becomes the old world
+      // (this way we only have to allocate the array once)
+      char *oldworld = world;
+      world = newworld;
+      newworld = oldworld;
+    }
+  free(newworld);
+}
+
 int main(int argc, char *argv[])
 {
-  //command line arguments are passed in as an array of strings!
-  //where argc says how many arguments there are
-  //(note the executable itself is the first argument, so argc is always 1)
-   int i;
-   int id;               /* Process rank */
-   int p;                /* Number of processes */
 
-   MPI_Init (&argc, &argv);
-   MPI_Comm_rank (MPI_COMM_WORLD, &id);
-   MPI_Comm_size (MPI_COMM_WORLD, &p);
+  int my_rank;               /* Process rank */
+  int comm_sz;                /* Number of processes */
+  int WORLDSIZE;
 
-   int WORLDSIZE = 128;
+  MPI_Init (&argc, &argv);
+  MPI_Comm_rank (MPI_COMM_WORLD, &my_rank);
+  MPI_Comm_size (MPI_COMM_WORLD, &comm_sz);
 
-   int *localcells; //local array
-   int localsize = (WORLDSIZE/p); //how many items you care about
-   int paddedsize = localsize + 2;  //a
-                                    //plus two extra indexes, one for each neighbor
+  if (argc > 1) {
+    WORLDSIZE = atoi(argv[1]);
+  }
+  else{
+    printf("usage: runcell <worldsize>\n");
+  }
 
-   printf("node :%d, worldsize: %d, localsize: %d\n",id,WORLDSIZE,localsize);
+  //Figure out slice size (number of rows per processor)
+  int sliceSize = 
 
-   if (WORLDSIZE%p != 0)
-     {
-       printf("Worldsize must be divisible by processors!");
-       MPI_Finalize();
-       exit(1);
-     }
-
-   if ((localcells = calloc(paddedsize,sizeof(int))) == NULL) {
-	     printf("Memory allocation error!");
-	     MPI_Finalize();
-	     exit(1);
-   }
-   //everyone creates their own pointer to the world
-  // so that collective communication calls work
-   int *mycellworld;
-
-  // but only the root node actually needs to allocate
-   if (id == 0)
-     {
-       mycellworld = MakeCellWorld(WORLDSIZE);
-       InitCellWorld(mycellworld,WORLDSIZE);
-     }
+  if(my_rank == 0){
+      char *ruleset = MakeRandomRuleSet();
+      MPI_Bcast
+  }
 
 
 
-   //scatter global copy to rest of nodes' local world
-   // CSC-333 inclass: put code here
-	// STEP ONE
+  //Root process makes the random rule, broadcasts
 
-  // NOTE: you want to scatter
-  // LOCALSIZE-sized chunks of the world from the root node
-  // to each node
-  // (yes it is okay that you are scattering N items
-  // into an array of size N+2)
+  //Each processor makes their own world slice (complete rows, partial height worlds)
 
-   //now everyone has their own slice of the world!
+  //Each processor sends its top and bottom rows to the appropriate places
 
-   printf("I am node %d, my local world is now:\n",id);
-   printWorld(localcells,localsize,id);
+  //Each processor runs the rule, producing a new slice
 
-
-   int iterstep = 1;
-   int curiters = 0;
-   int maxiters = 100;
-   int rule = 30;
-
-   for (curiters = 0; curiters < maxiters; curiters++)
-     {
-       //every node runs MPIRunCellWorld over its local world
-       // notice that the local world is of size paddedsize
-       // to accomodate the values recieved from Left and Right neigbhors
-       //and make the running of the cell rules simpler.
-       MPIRunCellWorld(id,p,localcells,paddedsize,iterstep,rule);
-       //     printf("I am node %d, my local world is now:\n",id);
-       //printWorld(localcells,localsize,id);
+  //Task 0 gathers slices and prints
 
 
 
-       //CSC333 inclass
-       //now we need to use Gather to get the distributed data back to node 0
-       //so we can print it out
-       //hint: works very similarly to scatter
-       // Warning your code won't get much speedup if you call this every iteration!
-		 // STEP THREE
-
-	if (id == 0)
-	  {
-	    //    printf("results of gather on node 0\n");
-	    printWorld(mycellworld,WORLDSIZE,id);
-	  }
-     }
-
-   MPI_Finalize();
+  MPI_Finalize();
 }
