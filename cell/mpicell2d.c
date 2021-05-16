@@ -15,6 +15,27 @@ void printRuleset(char *rule, int size){
   printf("\n");
 }
 
+char * assembleWorld(char *slice, int numvals, int worldsz, int ID){
+  //Task 0 gathers slices
+  // char *newworld = calloc(numvals,sizeof(char));
+  // MPI_Gather(slice,numvals, MPI_CHAR, newworld, numvals, MPI_CHAR,0,MPI_COMM_WORLD);
+
+  char *newworld = calloc(numvals,sizeof(char));
+  MPI_Gather(slice,numvals, MPI_CHAR, newworld, numvals, MPI_CHAR,0,MPI_COMM_WORLD);
+  return newworld;
+}
+
+void newAssemble(char *out, char *slice, int worldsz, int slicesz, int ID){
+  //Task 0 gathers slices and prints
+  int count = slicesz*worldsz;
+  char *newworld = calloc(worldsz*worldsz,sizeof(char));
+  MPI_Gather(slice,count, MPI_CHAR, newworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
+
+  if(ID == 0){
+    print2DWorld(newworld,worldsz,worldsz,ID);
+  }
+  out = newworld;
+}
 
 int main(int argc, char *argv[])
 {
@@ -28,6 +49,8 @@ int main(int argc, char *argv[])
   MPI_Init (&argc, &argv);
   MPI_Comm_rank (MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size (MPI_COMM_WORLD, &comm_sz);
+
+
 
   if (argc > 1) {
     worldsize = atoi(argv[1]);
@@ -67,33 +90,34 @@ int main(int argc, char *argv[])
   //Each processor makes their own world slice (complete rows, partial height worlds)
 
   char *mycellworld = Make2DCellWorld(slicesize,worldsize);
-  print2DWorld(mycellworld,slicesize,worldsize,my_rank);
+  // print2DWorld(mycellworld,slicesize,worldsize,my_rank);
 
   //Each processor sends its top and bottom rows to the appropriate places
 
-
-
   //Each processor runs the rule, producing a new slice
-
-
   Run2DCellWorldOnce(mycellworld, slicesize, worldsize, my_rank, ruleset);
-  print2DWorld(mycellworld,slicesize,worldsize,my_rank);
+  // print2DWorld(mycellworld,slicesize,worldsize,my_rank);
 
   // for(curriter = 0; curriter < iterations; curriter ++){
   //   Run2DCellWorldOnce(mycellworld, slicesize, worldsize, my_rank, ruleset);
   // }
 
-
-  //Task 0 gathers slices and prints
-
+  // char *bigcellworld = assembleWorld(mycellworld,count,worldsize,my_rank);
   char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
-  int count = slicesize*worldsize;
-
-  MPI_Gather(mycellworld,count, MPI_CHAR, bigcellworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
+  newAssemble(bigcellworld,mycellworld,worldsize,slicesize,my_rank);
 
   if(my_rank == 0){
     print2DWorld(bigcellworld,worldsize,worldsize,my_rank);
   }
+
+  // //Task 0 gathers slices and prints
+  // int count = slicesize*worldsize;
+  // char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
+  // MPI_Gather(mycellworld,count, MPI_CHAR, bigcellworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
+  //
+  // if(my_rank == 0){
+  //   print2DWorld(bigcellworld,worldsize,worldsize,my_rank);
+  // }
 
   MPI_Finalize();
 }

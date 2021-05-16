@@ -26,7 +26,7 @@ char * Make2DCellWorld(int rows,int cols)
     printf("Memory allocation error!");
     return NULL;
   }
-int i;
+  int i;
 
   for (i = 0; i < rows*cols; i++){
       // either a 0 or a 1
@@ -124,15 +124,14 @@ void print2DWorld(char *world, int rows, int cols, int myid)
   printf("(%d):\n",myid);
   for (rownum = 0; rownum < rows ; rownum++) {
       for (colnum= 0; colnum < cols ; colnum++){
-
-  	printf("%d",world[rownum*cols + colnum]) ;
+  	      printf("%d",world[rownum*cols + colnum]) ;
       }
-  	printf("\n");
+  	  printf("\n");
 
       //if (world[i] != Nil){
-    //    if (world[i] == 1) printf("#");
-     //   else printf(" ");
-       //}
+      //  if (world[i] == 1) printf("#");
+      //  else printf(" ");
+      //}
     }
   printf("\n");
 }
@@ -197,7 +196,7 @@ void Run2DCellWorldOnce(char *world, int rows, int cols, int myid, char *ruleset
 
   char *newworld= Make2DCellWorld(rows,cols);
   int loc;
-  print2DWorld(world, rows,cols,0);
+  // print2DWorld(world, rows,cols,0);
   for (loc = 0; loc < rows*cols ; loc++){
       Apply2DRuleAtLoc(world,newworld,loc,rows,cols,ruleset);
   }
