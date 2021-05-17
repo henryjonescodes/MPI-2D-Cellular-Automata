@@ -107,11 +107,16 @@ int MakeIndexFromHood(char *world, int loc, int rows, int cols)
  void Apply2DRuleAtLoc(char *world, char *newworld,int loc, int rows, int cols, char *ruleset)
  {
    int curIndex = MakeIndexFromHood(world, loc, rows, cols);
+   // printf("Loc: %d \n", loc);
+   // printf("index: %d \n", curIndex);
+   // printf("newValue: %d \n", ruleset[curIndex]);
+
    //do some other stuff here
    //CSC333 - PROJECT - CHANGE THIS line
    // so that newworld[loc] actually becomes
    // whathever the ruleset tells you.
-   newworld[loc] = world[loc];
+   // newworld[loc] = world[loc];
+   newworld[loc] = ruleset[curIndex];
 
    return;
 
@@ -178,6 +183,7 @@ void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
       int loc;
       print2DWorld(world, rows,cols,0);
       for (loc = 0; loc < rows*cols ; loc++){
+          printf("applying rule at %d \n", loc);
 	        Apply2DRuleAtLoc(world,newworld,loc,rows,cols,ruleset);
       }
 
@@ -191,21 +197,24 @@ void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
   free(newworld);
 }
 
-void Run2DCellWorldOnce(char *world, int rows, int cols, int myid, char *ruleset)
+void Run2DCellWorldOnce(char **world, int rows, int cols, int myid, char *ruleset)
 {
 
   char *newworld= Make2DCellWorld(rows,cols);
   int loc;
   // print2DWorld(world, rows,cols,0);
   for (loc = 0; loc < rows*cols ; loc++){
-      Apply2DRuleAtLoc(world,newworld,loc,rows,cols,ruleset);
+      // printf("applying rule at %d \n", loc);
+      Apply2DRuleAtLoc(*world,newworld,loc,rows,cols,ruleset);
   }
+
+  // print2DWorld(newworld, rows, cols, myid);
 
   // the world becomes the new world
   // and new world becomes the old world
   // (this way we only have to allocate the array once)
-  char *oldworld = world;
-  world = newworld;
+  char *oldworld = *world;
+  *world = newworld;
   newworld = oldworld;
   free(newworld);
 }

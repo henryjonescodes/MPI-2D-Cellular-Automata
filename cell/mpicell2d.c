@@ -18,31 +18,6 @@ void printRuleset(char *rule, int size){
   printf("\n");
 }
 
-void printSendBuf(char *cellworld, int start, int end, int ID, char *message){
-  printf("(%d): %s \n",ID,message);
-  int j;
-  for(j = start; j < end; j++){
-    printf("%d", cellworld[j]);
-  }
-  printf("\n");
-}
-
-// char * expandCellWorld(char* cellworld, int size, char* prev, char *next, int slicesz){
-//   int newSize = size+(slicesz*2);
-//   char * expanded = calloc(newSize, sizeof(char));
-//   int z;
-//   for(z = 0; z<newSize; z++){
-//     if(z < slicesz){
-//       expanded[z] = prev[z];
-//     } else if (z > size + slicesz){
-//       expanded[z] = next[z-(size + slicesz)];
-//     } else{
-//       expanded[z] = cellworld[z-slicesz];
-//     }
-//   }
-//   return expanded;
-// }
-
 char * expandCellWorld(char *cellworld, char *prev, char *next, int size, int slicesz){
   int count = 0;
   int newSize = (size*slicesz) + (size * 2);
@@ -70,19 +45,10 @@ void assembleWorld(char **out, char *slice, int worldsz, int slicesz, int ID){
   char *newworld = calloc(worldsz*worldsz,sizeof(char));
   MPI_Gather(slice,count, MPI_CHAR, newworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
 
-  // //print the world
-  // if(ID == 0){
-  //   print2DWorld(newworld,worldsz,worldsz,ID);
-  // }
   *out = newworld;
-  // out = newworld;
 }
 
 void distrubuteValues(char* wholeworld, char* before, char* after, int size, int slicesz, int ID, int numProcs){
-  //Make room for the values before and after each slice on each node
-  // char *beforeworld = calloc(size,sizeof(char));
-  // char *afterworld = calloc(size,sizeof(char));
-
   //Calculate which processes to send and recieve from
   int above = ID - 1;
   int below = ID + 1;
@@ -99,10 +65,6 @@ void distrubuteValues(char* wholeworld, char* before, char* after, int size, int
 
   //Even processes send then recieve, odd's do the opposite
   if(ID % 2 == 0){
-
-    // printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (above)");
-    // printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
-
     //Send and recieve above
     MPI_Send(wholeworld, size, MPI_CHAR, above, 0, MPI_COMM_WORLD);
     MPI_Recv(after, size, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -110,16 +72,8 @@ void distrubuteValues(char* wholeworld, char* before, char* after, int size, int
     //Send and recieve below
     MPI_Send(wholeworld + (slicesz - 1) * size * sizeof(char), size, MPI_CHAR, below, 0, MPI_COMM_WORLD);
     MPI_Recv(before, size, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    // printSendBuf(beforevals, 0, worldsize,my_rank,"Recieve (Above)");
-    // printSendBuf(aftervals, 0, worldsize,my_rank,"Recieve (Below)");
-
   }
   else {
-
-    // printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (Above)");
-    // printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
-
     //revieve and send below
     MPI_Recv(after, size, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Send(wholeworld, size, MPI_CHAR, below, 0, MPI_COMM_WORLD);
@@ -127,9 +81,6 @@ void distrubuteValues(char* wholeworld, char* before, char* after, int size, int
     //revieve and send above
     MPI_Recv(before, size, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Send(wholeworld + (slicesz - 1) * size * sizeof(char), size, MPI_CHAR, above, 0, MPI_COMM_WORLD);
-
-    // printSendBuf(beforevals, 0, worldsize,my_rank,"Recieve (Above)");
-    // printSendBuf(aftervals, 0, worldsize,my_rank,"Recieve (Below)");
   }
 }
 
@@ -145,8 +96,6 @@ int main(int argc, char *argv[])
   MPI_Init (&argc, &argv);
   MPI_Comm_rank (MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size (MPI_COMM_WORLD, &comm_sz);
-
-
 
   if (argc > 1) {
     worldsize = atoi(argv[1]);
@@ -184,82 +133,39 @@ int main(int argc, char *argv[])
   //Root node broadcasts rule to all non-root nodes
   MPI_Bcast(ruleset, RULESETSIZE, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-  //Each processor makes their own world slice (complete rows, partial height worlds)
+  //Each processor makes their own world slice on the first iteration
   char *mycellworld = Make2DCellWorld(slicesize,worldsize);
-  // print2DWorld(mycellworld,slicesize,worldsize,my_rank);
 
-  // Task 0 gathers slices and prints
-  char *testCell = calloc(worldsize*worldsize,sizeof(char));
-  assembleWorld(&testCell,mycellworld,worldsize,slicesize,my_rank);
+  //Run the cell world `iterations` amount of times
+  for(curriter = 0; curriter < iterations; curriter ++){
+      // Task 0 gathers slices and prints
+      char *testCell = calloc(worldsize*worldsize,sizeof(char));
+      assembleWorld(&testCell,mycellworld,worldsize,slicesize,my_rank);
 
-  if(my_rank == 0){
-    print2DWorld(testCell,worldsize,worldsize,my_rank);
+      if(my_rank == 0){
+        print2DWorld(testCell,worldsize,worldsize,my_rank);
+      }
+
+      //Make room for the values before and after each slice on each node
+      char *beforevals = calloc(worldsize,sizeof(char));
+      char *aftervals = calloc(worldsize,sizeof(char));
+
+      //Distribute values before and after each node's block
+      distrubuteValues(mycellworld,beforevals,aftervals,worldsize,slicesize,my_rank, comm_sz);
+
+      //Make an expanded world 2 rows larger containing the recieved values
+      char * expandedWorld = expandCellWorld(mycellworld,beforevals,aftervals,worldsize,slicesize);
+
+      //Apply the rule once in paralell
+      Run2DCellWorldOnce(&expandedWorld, slicesize+2, worldsize, my_rank, ruleset);
+
+      //Gather permuted world back to root node
+      char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
+      MPI_Gather(expandedWorld + (worldsize*sizeof(char)), worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+      //Scatter new mycellworld to all nodes
+      MPI_Scatter(permutedWorld, worldsize*slicesize, MPI_CHAR, mycellworld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
   }
-
-  //Make room for the values before and after each slice on each node
-  char *beforevals = calloc(worldsize,sizeof(char));
-  char *aftervals = calloc(worldsize,sizeof(char));
-
-  distrubuteValues(mycellworld,beforevals,aftervals,worldsize,slicesize,my_rank, comm_sz);
-
-  // int newSize = worldsize*slicesize+(worldsize*2);
-  // char* expandedWorld = calloc(newSize, sizeof(char));
-
-  printf("Before");
-  print2DWorld(beforevals,1,worldsize,my_rank);
-
-  printf("After");
-  print2DWorld(aftervals,1,worldsize,my_rank);
-
-  char* expandedWorld = expandCellWorld(mycellworld,beforevals,aftervals,worldsize,slicesize);
-  // strcat(expandedWorld, beforevals);
-  // strcat(expandedWorld, mycellworld);
-  // strcat(expandedWorld, aftervals);
-
-  if(my_rank == 0){
-    printf("Expanded");
-    print2DWorld(expandedWorld,slicesize+2,worldsize,my_rank);
-  }
-
-  Run2DCellWorldOnce(expandedWorld, slicesize+2, worldsize, my_rank, ruleset);
-
-  if(my_rank == 0){
-    printf("Expanded");
-    print2DWorld(expandedWorld,slicesize+2,worldsize,my_rank);
-  }
-  
-  // // Task 0 gathers slices and prints
-  // char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
-  // assembleWorld(&bigcellworld,mycellworld,worldsize,slicesize,my_rank);
-  //
-  // if(my_rank == 0){
-  //   print2DWorld(bigcellworld,worldsize,worldsize,my_rank);
-  // }
-
-
-  //Each processor runs the rule, producing a new slice
-  // Run2DCellWorldOnce(mycellworld, slicesize, worldsize, my_rank, ruleset);
-
-  //Make space for the working world
-  // char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
-
-
-  // //Run the cell world `iterations` amount of times
-  // for(curriter = 0; curriter < iterations; curriter ++){
-  //   //Apply the rule on each node
-  //   Run2DCellWorldOnce(mycellworld, slicesize, worldsize, my_rank, ruleset);
-  //
-  //   //Assemble the world
-  //   assembleWorld(&bigcellworld,mycellworld,worldsize,slicesize,my_rank);
-  //
-  //   //print the world
-  //   if(my_rank == 0){
-  //     print2DWorld(bigcellworld,worldsize,worldsize,my_rank);
-  //   }
-  // }
-
-  // char *bigcellworld = assembleWorld(mycellworld,count,worldsize,my_rank);
-
 
   // //Task 0 gathers slices and prints
   // int count = slicesize*worldsize;
