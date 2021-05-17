@@ -22,7 +22,7 @@ char *MakeRandomRuleSet()
 char * Make2DCellWorld(int rows,int cols)
 {
   char *outworld;
-  if ((outworld = calloc(rows*cols,sizeof(char))) == NULL) {
+  if ((outworld = calloc(rows*cols+1,sizeof(char))) == NULL) {
     printf("Memory allocation error!");
     return NULL;
   }
