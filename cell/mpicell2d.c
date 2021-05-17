@@ -27,18 +27,39 @@ void printSendBuf(char *cellworld, int start, int end, int ID, char *message){
   printf("\n");
 }
 
-char * expandCellWorld(char* cellworld, int size, char* prev, char *next, int slicesz){
-  int newSize = size+(slicesz*2);
+// char * expandCellWorld(char* cellworld, int size, char* prev, char *next, int slicesz){
+//   int newSize = size+(slicesz*2);
+//   char * expanded = calloc(newSize, sizeof(char));
+//   int z;
+//   for(z = 0; z<newSize; z++){
+//     if(z < slicesz){
+//       expanded[z] = prev[z];
+//     } else if (z > size + slicesz){
+//       expanded[z] = next[z-(size + slicesz)];
+//     } else{
+//       expanded[z] = cellworld[z-slicesz];
+//     }
+//   }
+//   return expanded;
+// }
+
+char * expandCellWorld(char *cellworld, char *prev, char *next, int size, int slicesz){
+  int count = 0;
+  int newSize = (size*slicesz) + (size * 2);
   char * expanded = calloc(newSize, sizeof(char));
-  int z;
-  for(z = 0; z<newSize; z++){
-    if(z < slicesz){
-      expanded[z] = prev[z];
-    } else if (z > size + slicesz){
-      expanded[z] = next[z-(size + slicesz)];
-    } else{
-      expanded[z] = cellworld[z-slicesz];
-    }
+
+  int i;
+  for(i = 0; i < size; i++){
+    expanded[count] = prev[i];
+    count += 1;
+  }
+  for(i = 0; i < size*slicesz; i++){
+    expanded[count] = cellworld[i];
+    count += 1;
+  }
+  for(i = 0; i < size; i++){
+    expanded[count] = next[i];
+    count += 1;
   }
   return expanded;
 }
@@ -55,6 +76,61 @@ void assembleWorld(char **out, char *slice, int worldsz, int slicesz, int ID){
   // }
   *out = newworld;
   // out = newworld;
+}
+
+void distrubuteValues(char* wholeworld, char* before, char* after, int size, int slicesz, int ID, int numProcs){
+  //Make room for the values before and after each slice on each node
+  // char *beforeworld = calloc(size,sizeof(char));
+  // char *afterworld = calloc(size,sizeof(char));
+
+  //Calculate which processes to send and recieve from
+  int above = ID - 1;
+  int below = ID + 1;
+
+  //Adjust the root node's target
+  if(above < 0){
+    above = numProcs - 1;
+  }
+
+  //Adjust last node's target
+  if(below >= numProcs){
+    below = 0;
+  }
+
+  //Even processes send then recieve, odd's do the opposite
+  if(ID % 2 == 0){
+
+    // printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (above)");
+    // printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
+
+    //Send and recieve above
+    MPI_Send(wholeworld, size, MPI_CHAR, above, 0, MPI_COMM_WORLD);
+    MPI_Recv(after, size, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    //Send and recieve below
+    MPI_Send(wholeworld + (slicesz - 1) * size * sizeof(char), size, MPI_CHAR, below, 0, MPI_COMM_WORLD);
+    MPI_Recv(before, size, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    // printSendBuf(beforevals, 0, worldsize,my_rank,"Recieve (Above)");
+    // printSendBuf(aftervals, 0, worldsize,my_rank,"Recieve (Below)");
+
+  }
+  else {
+
+    // printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (Above)");
+    // printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
+
+    //revieve and send below
+    MPI_Recv(after, size, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Send(wholeworld, size, MPI_CHAR, below, 0, MPI_COMM_WORLD);
+
+    //revieve and send above
+    MPI_Recv(before, size, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Send(wholeworld + (slicesz - 1) * size * sizeof(char), size, MPI_CHAR, above, 0, MPI_COMM_WORLD);
+
+    // printSendBuf(beforevals, 0, worldsize,my_rank,"Recieve (Above)");
+    // printSendBuf(aftervals, 0, worldsize,my_rank,"Recieve (Below)");
+  }
 }
 
 int main(int argc, char *argv[])
@@ -124,59 +200,10 @@ int main(int argc, char *argv[])
   char *beforevals = calloc(worldsize,sizeof(char));
   char *aftervals = calloc(worldsize,sizeof(char));
 
-  //Calculate which processes to send and recieve from
-  int above = my_rank - 1;
-  int below = my_rank + 1;
+  distrubuteValues(mycellworld,beforevals,aftervals,worldsize,slicesize,my_rank, comm_sz);
 
-  //Adjust the root node's target
-  if(above < 0){
-    above = comm_sz - 1;
-  }
-
-  //Adjust last node's target
-  if(below >= comm_sz){
-    below = 0;
-  }
-
-  //Even processes send then recieve, odd's do the opposite
-  if(my_rank % 2 == 0){
-
-    // printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (above)");
-    // printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
-
-    //Send and recieve above
-    MPI_Send(mycellworld, worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD);
-    MPI_Recv(aftervals, worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    //Send and recieve below
-    MPI_Send(mycellworld + (slicesize - 1) * worldsize * sizeof(char), worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD);
-    MPI_Recv(beforevals, worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    // printSendBuf(beforevals, 0, worldsize,my_rank,"Recieve (Above)");
-    // printSendBuf(aftervals, 0, worldsize,my_rank,"Recieve (Below)");
-
-  }
-  else {
-
-    // printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (Above)");
-    // printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
-
-    //revieve and send below
-    MPI_Recv(aftervals, worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Send(mycellworld, worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD);
-
-    //revieve and send above
-    MPI_Recv(beforevals, worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Send(mycellworld + (slicesize - 1) * worldsize * sizeof(char), worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD);
-
-    // printSendBuf(beforevals, 0, worldsize,my_rank,"Recieve (Above)");
-    // printSendBuf(aftervals, 0, worldsize,my_rank,"Recieve (Below)");
-  }
-
-  // char* expanndedWorld = expandCellWorld(mycellworld,worldsize*slicesize, beforevals, aftervals, worldsize);
-
-  int newSize = worldsize*slicesize+(worldsize*2);
-  char* expandedWorld = calloc(newSize, sizeof(char));
+  // int newSize = worldsize*slicesize+(worldsize*2);
+  // char* expandedWorld = calloc(newSize, sizeof(char));
 
   printf("Before");
   print2DWorld(beforevals,1,worldsize,my_rank);
@@ -184,51 +211,23 @@ int main(int argc, char *argv[])
   printf("After");
   print2DWorld(aftervals,1,worldsize,my_rank);
 
-  strcat(expandedWorld, beforevals);
-  strcat(expandedWorld, mycellworld);
-  strcat(expandedWorld, aftervals);
+  char* expandedWorld = expandCellWorld(mycellworld,beforevals,aftervals,worldsize,slicesize);
+  // strcat(expandedWorld, beforevals);
+  // strcat(expandedWorld, mycellworld);
+  // strcat(expandedWorld, aftervals);
 
   if(my_rank == 0){
     printf("Expanded");
     print2DWorld(expandedWorld,slicesize+2,worldsize,my_rank);
   }
 
-  // //Even processes send then recieve, odd's do the opposite
-  // if(my_rank % 2 == 0){
-  //
-  //   printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (above)");
-  //   printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
-  //
-  //   //Send and recieve above
-  //   MPI_Send(mycellworld, worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD);
-  //   MPI_Recv(mycellworld + (slicesize - 1) * worldsize * sizeof(char), worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  //
-  //   //Send and recieve below
-  //   MPI_Send(mycellworld + (slicesize - 1) * worldsize * sizeof(char), worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD);
-  //   MPI_Recv(mycellworld, worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  //
-  //   printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Recieve (Below)");
-  //   printSendBuf(mycellworld, 0, worldsize,my_rank,"Recieve (Above)");
-  //
-  // }
-  // else {
-  //
-  //   printSendBuf(mycellworld, 0, worldsize,my_rank,"Sending (Above)");
-  //   printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Sending (Below)");
-  //
-  //   //revieve and send below
-  //   MPI_Recv(mycellworld + (slicesize - 1) * worldsize * sizeof(char), worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  //   MPI_Send(mycellworld, worldsize, MPI_CHAR, below, 0, MPI_COMM_WORLD);
-  //
-  //   //revieve and send above
-  //   MPI_Recv(mycellworld, worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  //   MPI_Send(mycellworld + (slicesize - 1) * worldsize * sizeof(char), worldsize, MPI_CHAR, above, 0, MPI_COMM_WORLD);
-  //
-  //   printSendBuf(mycellworld, (slicesize - 1) * worldsize, slicesize*worldsize,my_rank,"Recieve (Below)");
-  //   printSendBuf(mycellworld, 0, worldsize,my_rank,"Recieve (Above)");
-  //
-  // }
+  Run2DCellWorldOnce(expandedWorld, slicesize+2, worldsize, my_rank, ruleset);
 
+  if(my_rank == 0){
+    printf("Expanded");
+    print2DWorld(expandedWorld,slicesize+2,worldsize,my_rank);
+  }
+  
   // // Task 0 gathers slices and prints
   // char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
   // assembleWorld(&bigcellworld,mycellworld,worldsize,slicesize,my_rank);
