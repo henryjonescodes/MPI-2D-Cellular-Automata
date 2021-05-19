@@ -29,8 +29,12 @@ char * Make2DCellWorld(int rows,int cols)
   int i;
 
   for (i = 0; i < rows*cols; i++){
-      // either a 0 or a 1
-     outworld[i]  = rand()%2;
+    // either a 0 or a 1
+    if((rand())%21 > 0){
+       outworld[i] = 1;
+    } else {
+       outworld[i] = 0;
+    }
   }
   return outworld;
 }
@@ -176,7 +180,8 @@ would have index 101010101, and the rule would be found at index 341 (0x155) of 
 void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
 {
 
-  char *newworld= Make2DCellWorld(rows,cols);
+  // char *newworld= Make2DCellWorld(rows,cols);
+  char *newworld= calloc(rows*cols+1,sizeof(char));
 
   while(1)
     {

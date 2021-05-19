@@ -5,7 +5,8 @@
 #include <string.h>
 #include <stdbool.h>
 
-bool GATHER_EVERY_ITER = true;
+bool PRINT_EVERY_ITER = true;
+bool PRINT_AT_END = true;
 
 //to compile: make -f Makefile
 //to run: mpirun -np 4 ./mpicell2d
@@ -37,6 +38,18 @@ char * expandCellWorld(char *cellworld, char *prev, char *next, int size, int sl
     count += 1;
   }
   return expanded;
+}
+
+char * reduceCellWorld(char *cellworld, int size, int slicesz){
+  char * out = calloc(size*slicesz,sizeof(char));
+  int i;
+  int j = 0;
+  int end = size + (size*slicesz);
+  for(i = size; i < end; i++){
+    out[j] = cellworld[i];
+    j++;
+  }
+  return out;
 }
 
 void assembleWorld(char **out, char *slice, int worldsz, int slicesz, int ID){
@@ -125,9 +138,9 @@ int main(int argc, char *argv[])
   //Root process makes the random rule
   if(my_rank == 0){
       ruleset = MakeRandomRuleSet();
-      printf("(%d): Ruleset\n", my_rank);
+      printf("(%d): Ruleset: ", my_rank);
       printRuleset(ruleset,RULESETSIZE);
-      printf("(%d):\n SliceSize: %d\n", my_rank,slicesize);
+      printf("(%d): SliceSize: %d\n", my_rank,slicesize);
   }
 
   //Root node broadcasts rule to all non-root nodes
@@ -138,14 +151,6 @@ int main(int argc, char *argv[])
 
   //Run the cell world `iterations` amount of times
   for(curriter = 0; curriter < iterations; curriter ++){
-      // Task 0 gathers slices and prints
-      char *testCell = calloc(worldsize*worldsize,sizeof(char));
-      assembleWorld(&testCell,mycellworld,worldsize,slicesize,my_rank);
-
-      if(my_rank == 0){
-        print2DWorld(testCell,worldsize,worldsize,my_rank);
-      }
-
       //Make room for the values before and after each slice on each node
       char *beforevals = calloc(worldsize,sizeof(char));
       char *aftervals = calloc(worldsize,sizeof(char));
@@ -159,12 +164,28 @@ int main(int argc, char *argv[])
       //Apply the rule once in paralell
       Run2DCellWorldOnce(&expandedWorld, slicesize+2, worldsize, my_rank, ruleset);
 
-      //Gather permuted world back to root node
-      char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
-      MPI_Gather(expandedWorld + (worldsize*sizeof(char)), worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+      //Reduce the world back to slicesize for the next iteration
+      mycellworld = reduceCellWorld(expandedWorld,worldsize,slicesize);
 
-      //Scatter new mycellworld to all nodes
-      MPI_Scatter(permutedWorld, worldsize*slicesize, MPI_CHAR, mycellworld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+      if (PRINT_EVERY_ITER){
+        // Task 0 gathers slices and prints
+        //Gather permuted world back to root node
+        char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
+        MPI_Gather(expandedWorld + (worldsize*sizeof(char)), worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+        if(my_rank == 0){
+          print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
+        }
+      }
+  }
+
+  if (PRINT_AT_END){
+    // Task 0 gathers slices and prints
+    //Gather permuted world back to root node
+    char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
+    MPI_Gather(mycellworld, worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+    if(my_rank == 0){
+      print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
+    }
   }
 
   // //Task 0 gathers slices and prints
