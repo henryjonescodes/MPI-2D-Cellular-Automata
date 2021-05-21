@@ -187,15 +187,6 @@ int main(int argc, char *argv[])
       print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
     }
   }
-
-  // //Task 0 gathers slices and prints
-  // int count = slicesize*worldsize;
-  // char *bigcellworld = calloc(worldsize*worldsize,sizeof(char));
-  // MPI_Gather(mycellworld,count, MPI_CHAR, bigcellworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
-  //
-  // if(my_rank == 0){
-  //   print2DWorld(bigcellworld,worldsize,worldsize,my_rank);
-  // }
-
+  
   MPI_Finalize();
 }
