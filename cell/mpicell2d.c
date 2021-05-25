@@ -105,6 +105,7 @@ int main(int argc, char *argv[])
   int worldsize;
   int iterations = 4;
   int curriter = 0;
+  int t1, t2;
 
   MPI_Init (&argc, &argv);
   MPI_Comm_rank (MPI_COMM_WORLD, &my_rank);
@@ -142,6 +143,7 @@ int main(int argc, char *argv[])
       printRuleset(ruleset,RULESETSIZE);
       printf("(%d): SliceSize: %d\n", my_rank,slicesize);
   }
+  t1 = MPI_Wtime();
 
   //Root node broadcasts rule to all non-root nodes
   MPI_Bcast(ruleset, RULESETSIZE, MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -166,7 +168,7 @@ int main(int argc, char *argv[])
 
       //Reduce the world back to slicesize for the next iteration
       mycellworld = reduceCellWorld(expandedWorld,worldsize,slicesize);
-
+      
       if (PRINT_EVERY_ITER){
         // Task 0 gathers slices and prints
         //Gather permuted world back to root node
@@ -177,14 +179,21 @@ int main(int argc, char *argv[])
         }
       }
   }
+  t2 = MPI_Wtime();
 
   if (PRINT_AT_END){
     // Task 0 gathers slices and prints
     //Gather permuted world back to root node
     char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
     MPI_Gather(mycellworld, worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+    
     if(my_rank == 0){
       print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
+      printf("duration: %d seconds \n", t2 -t1);
+      printf("t1 %d \n", t1);
+      printf("t2 %d \n", t2);
+
+
     }
   }
   
