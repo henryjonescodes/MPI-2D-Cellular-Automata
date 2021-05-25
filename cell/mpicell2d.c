@@ -1,175 +1,201 @@
+#include "2DCellAut.h"
+#include "mpi.h"
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include "CellAut.h"
-#include "mpi.h"
-/* mpicell.c
- author: John Rieffel
-*/
+#include <stdbool.h>
 
+bool PRINT_EVERY_ITER = true;
+bool PRINT_AT_END = true;
 
-// We need to get values from our neighbors, and send values to our neighbors
-// how to do it without deadlock?
-// MPI_Send is non-blocking, except when it isn't
-//
-// When this function returns,
-// leftval should contain the value sent by your left neighbor
-// and rightval should contain the value sent by your right neighbor
+//to compile: make -f Makefile
+//to run: mpirun -np 4 ./mpicell2d
 
-void DistributeLeftAndRightVals(int myID, int numprocs, int *mylocalcells, int localsize, int *leftval, int *rightval)
-{
-   int rightID=(myID+1)%numprocs;  //neighbor to your right
-   int leftID=(myID-1+numprocs)%numprocs; //neighbor to your left
-
-   int myfirst = mylocalcells[0];
-   int mylast = mylocalcells[localsize-3]; //note that we have to extra cells of padding.
-
-   MPI_Status status;
-
-   //CSC-333 inclass: put communication in here!
-	// STEP TWO
-  //replace these lines below with your correct communications
-   *leftval = 0;
-   *rightval = 0;
-   // printf("I am node %d, I got %d from left node %d and %d from right node %d\n", myID,*leftval,leftID,*rightval,rightID);
-
+void printRuleset(char *rule, int size){
+  int z;
+  for(z = 0; z <size; z++){
+    printf("%d",rule[z]);
+  }
+  printf("\n");
 }
 
-void MPIRunCellWorld(int myID, int numprocs, int *localcells, int sizeOfMyWorld, int iterations, int rule)
-{
-   int leftval = 0;
-   int rightval = 0;
-   int *newcells = MakeCellWorld(sizeOfMyWorld);
+char * expandCellWorld(char *cellworld, char *prev, char *next, int size, int slicesz){
+  int count = 0;
+  int newSize = (size*slicesz) + (size * 2);
+  char * expanded = calloc(newSize, sizeof(char));
 
-  int itercount = 0;
-  for (itercount = 0; itercount < iterations; itercount++)
-     {
-             // printf("node %d before rules\n",myID);
-             // printWorld(localcells,localsize,myID);
-      // after calling this
-      // the variables leftval and rightval
-      // should have the values from the neighboring worlds.
-       DistributeLeftAndRightVals(myID,numprocs, localcells, sizeOfMyWorld, &leftval, &rightval);
-
-
-       // shouldn't have to touch this, it should just work
-       // Assuming we've padded localworld with two extra indexes
-       //We can put the right neigbhor's value at the second to last index
-       // and the left neighbor's value at the last index
-       //
-       // i.e. if size of localworld L is actually five (5)
-       // index: 0     1    2    3    4    5  6
-       //       L[0] L[1] L[2] L[3] L[4]   R  L
-       // and then if we treat the array as a torus/ring, the math works
-       // with the same function as the serial version.
-       localcells[sizeOfMyWorld-2] = rightval;
-       localcells[sizeOfMyWorld-1] = leftval;
-       int locali = 0;
-       for (locali = 0; locali < sizeOfMyWorld; locali++) {
-	        ApplyRuleAtLoc(localcells,newcells,locali,sizeOfMyWorld,rule);
-        }
-       // the world becomes the new world
-       // and new world becomes the old world
-       // (this way we only have to allocate the array once)
-       memcpy((void *)localcells,(void *)newcells,sizeOfMyWorld*sizeof(int));
-
-     }
-     free(newcells);
-
+  int i;
+  for(i = 0; i < size; i++){
+    expanded[count] = prev[i];
+    count += 1;
+  }
+  for(i = 0; i < size*slicesz; i++){
+    expanded[count] = cellworld[i];
+    count += 1;
+  }
+  for(i = 0; i < size; i++){
+    expanded[count] = next[i];
+    count += 1;
+  }
+  return expanded;
 }
+
+char * reduceCellWorld(char *cellworld, int size, int slicesz){
+  char * out = calloc(size*slicesz,sizeof(char));
+  int i;
+  int j = 0;
+  int end = size + (size*slicesz);
+  for(i = size; i < end; i++){
+    out[j] = cellworld[i];
+    j++;
+  }
+  return out;
+}
+
+void assembleWorld(char **out, char *slice, int worldsz, int slicesz, int ID){
+  //Task 0 gathers slices and prints
+  int count = slicesz*worldsz;
+  char *newworld = calloc(worldsz*worldsz,sizeof(char));
+  MPI_Gather(slice,count, MPI_CHAR, newworld, count, MPI_CHAR,0,MPI_COMM_WORLD);
+
+  *out = newworld;
+}
+
+void distrubuteValues(char* wholeworld, char* before, char* after, int size, int slicesz, int ID, int numProcs){
+  //Calculate which processes to send and recieve from
+  int above = ID - 1;
+  int below = ID + 1;
+
+  //Adjust the root node's target
+  if(above < 0){
+    above = numProcs - 1;
+  }
+
+  //Adjust last node's target
+  if(below >= numProcs){
+    below = 0;
+  }
+
+  //Even processes send then recieve, odd's do the opposite
+  if(ID % 2 == 0){
+    //Send and recieve above
+    MPI_Send(wholeworld, size, MPI_CHAR, above, 0, MPI_COMM_WORLD);
+    MPI_Recv(after, size, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    //Send and recieve below
+    MPI_Send(wholeworld + (slicesz - 1) * size * sizeof(char), size, MPI_CHAR, below, 0, MPI_COMM_WORLD);
+    MPI_Recv(before, size, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  }
+  else {
+    //revieve and send below
+    MPI_Recv(after, size, MPI_CHAR, below, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Send(wholeworld, size, MPI_CHAR, below, 0, MPI_COMM_WORLD);
+
+    //revieve and send above
+    MPI_Recv(before, size, MPI_CHAR, above, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Send(wholeworld + (slicesz - 1) * size * sizeof(char), size, MPI_CHAR, above, 0, MPI_COMM_WORLD);
+  }
+}
+
 int main(int argc, char *argv[])
 {
-  //command line arguments are passed in as an array of strings!
-  //where argc says how many arguments there are
-  //(note the executable itself is the first argument, so argc is always 1)
-   int i;
-   int id;               /* Process rank */
-   int p;                /* Number of processes */
 
-   MPI_Init (&argc, &argv);
-   MPI_Comm_rank (MPI_COMM_WORLD, &id);
-   MPI_Comm_size (MPI_COMM_WORLD, &p);
+  int my_rank;               /* Process rank */
+  int comm_sz;                /* Number of processes */
+  int worldsize;
+  int iterations = 4;
+  int curriter = 0;
+  double t1, t2;
 
-   int WORLDSIZE = 128;
+  MPI_Init (&argc, &argv);
+  MPI_Comm_rank (MPI_COMM_WORLD, &my_rank);
+  MPI_Comm_size (MPI_COMM_WORLD, &comm_sz);
 
-   int *localcells; //local array
-   int localsize = (WORLDSIZE/p); //how many items you care about
-   int paddedsize = localsize + 2;  //a
-                                    //plus two extra indexes, one for each neighbor
+  if (argc > 1) {
+    worldsize = atoi(argv[1]);
+    if(argc > 2){
+      iterations = atoi(argv[2]);
+    }
+  }
+  else {
+    if(my_rank == 0){
+      printf("usage: runcell <worldsize>\n");
+      printf("usage: runcell <worldsize> <iterations\n");
+    }
+    exit(1);
+  }
 
-   printf("node :%d, worldsize: %d, localsize: %d\n",id,WORLDSIZE,localsize);
+  if(worldsize%comm_sz != 0){
+    if(my_rank == 0){
+      printf("can't do this on %d processors", comm_sz);
+    }
+    exit(1);
+  }
 
-   if (WORLDSIZE%p != 0)
-     {
-       printf("Worldsize must be divisible by processors!");
-       MPI_Finalize();
-       exit(1);
-     }
+  //Figure out slice size (number of rows per processor)
+  int slicesize = worldsize/comm_sz;
+  char *ruleset = calloc(RULESETSIZE,sizeof(char));
 
-   if ((localcells = calloc(paddedsize,sizeof(int))) == NULL) {
-	     printf("Memory allocation error!");
-	     MPI_Finalize();
-	     exit(1);
-   }
-   //everyone creates their own pointer to the world
-  // so that collective communication calls work
-   int *mycellworld;
+  //Root process makes the random rule
+  if(my_rank == 0){
+      ruleset = MakeRandomRuleSet();
+      printf("(%d): Ruleset: ", my_rank);
+      printRuleset(ruleset,RULESETSIZE);
+      printf("(%d): SliceSize: %d\n", my_rank,slicesize);
+  }
+  t1 = MPI_Wtime();
 
-  // but only the root node actually needs to allocate
-   if (id == 0)
-     {
-       mycellworld = MakeCellWorld(WORLDSIZE);
-       InitCellWorld(mycellworld,WORLDSIZE);
-     }
+  //Root node broadcasts rule to all non-root nodes
+  MPI_Bcast(ruleset, RULESETSIZE, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+  //Each processor makes their own world slice on the first iteration
+  char *mycellworld = Make2DCellWorld(slicesize,worldsize);
+
+  //Run the cell world `iterations` amount of times
+  for(curriter = 0; curriter < iterations; curriter ++){
+      //Make room for the values before and after each slice on each node
+      char *beforevals = calloc(worldsize,sizeof(char));
+      char *aftervals = calloc(worldsize,sizeof(char));
+
+      //Distribute values before and after each node's block
+      distrubuteValues(mycellworld,beforevals,aftervals,worldsize,slicesize,my_rank, comm_sz);
+
+      //Make an expanded world 2 rows larger containing the recieved values
+      char * expandedWorld = expandCellWorld(mycellworld,beforevals,aftervals,worldsize,slicesize);
+
+      //Apply the rule once in paralell
+      Run2DCellWorldOnce(&expandedWorld, slicesize+2, worldsize, my_rank, ruleset);
+
+      //Reduce the world back to slicesize for the next iteration
+      mycellworld = reduceCellWorld(expandedWorld,worldsize,slicesize);
+      
+      if (PRINT_EVERY_ITER){
+        // Task 0 gathers slices and prints
+        //Gather permuted world back to root node
+        char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
+        MPI_Gather(expandedWorld + (worldsize*sizeof(char)), worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+        if(my_rank == 0){
+          print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
+        }
+      }
+  }
+  t2 = MPI_Wtime();
+
+  if (PRINT_AT_END){
+    // Task 0 gathers slices and prints
+    //Gather permuted world back to root node
+    char * permutedWorld = calloc(worldsize*worldsize,sizeof(char));
+    MPI_Gather(mycellworld, worldsize*slicesize, MPI_CHAR, permutedWorld, worldsize*slicesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+    
+    if(my_rank == 0){
+      print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
+      printf("duration: %f seconds \n", t2 -t1);
+      printf("t1 %f \n", t1);
+      printf("t2 %f \n", t2);
 
 
-
-   //scatter global copy to rest of nodes' local world
-   // CSC-333 inclass: put code here
-	// STEP ONE
-
-  // NOTE: you want to scatter
-  // LOCALSIZE-sized chunks of the world from the root node
-  // to each node
-  // (yes it is okay that you are scattering N items
-  // into an array of size N+2)
-
-   //now everyone has their own slice of the world!
-
-   printf("I am node %d, my local world is now:\n",id);
-   printWorld(localcells,localsize,id);
-
-
-   int iterstep = 1;
-   int curiters = 0;
-   int maxiters = 100;
-   int rule = 30;
-
-   for (curiters = 0; curiters < maxiters; curiters++)
-     {
-       //every node runs MPIRunCellWorld over its local world
-       // notice that the local world is of size paddedsize
-       // to accomodate the values recieved from Left and Right neigbhors
-       //and make the running of the cell rules simpler.
-       MPIRunCellWorld(id,p,localcells,paddedsize,iterstep,rule);
-       //     printf("I am node %d, my local world is now:\n",id);
-       //printWorld(localcells,localsize,id);
-
-
-
-       //CSC333 inclass
-       //now we need to use Gather to get the distributed data back to node 0
-       //so we can print it out
-       //hint: works very similarly to scatter
-       // Warning your code won't get much speedup if you call this every iteration!
-		 // STEP THREE
-
-	if (id == 0)
-	  {
-	    //    printf("results of gather on node 0\n");
-	    printWorld(mycellworld,WORLDSIZE,id);
-	  }
-     }
-
-   MPI_Finalize();
+    }
+  }
+  
+  MPI_Finalize();
 }

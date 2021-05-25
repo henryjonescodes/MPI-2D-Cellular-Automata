@@ -12,9 +12,9 @@ char *MakeRandomRuleSet()
       for (i = 0; i < RULESETSIZE; i++){
         //either a 0 or a 1
         outset[i]  = rand()%2;
-        printf("%d",outset[i]);
+        // printf("%d",outset[i]);
       }
-      printf("\n");
+      // printf("\n");
       return outset;
 
   }
@@ -22,16 +22,20 @@ char *MakeRandomRuleSet()
 char * Make2DCellWorld(int rows,int cols)
 {
   char *outworld;
-  if ((outworld = calloc(rows*cols,sizeof(char))) == NULL) {
+  if ((outworld = calloc(rows*cols+1,sizeof(char))) == NULL) {
     printf("Memory allocation error!");
     return NULL;
   }
-//int i;
+  int i;
 
- // for (i = 0; i < rows*cols; i++){
-    //either a 0 or a 1
-  //  outworld[i]  = rand()%2;
-//  }
+  for (i = 0; i < rows*cols; i++){
+    // either a 0 or a 1
+    if((rand())%21 > 0){
+       outworld[i] = 1;
+    } else {
+       outworld[i] = 0;
+    }
+  }
   return outworld;
 }
 
@@ -107,11 +111,16 @@ int MakeIndexFromHood(char *world, int loc, int rows, int cols)
  void Apply2DRuleAtLoc(char *world, char *newworld,int loc, int rows, int cols, char *ruleset)
  {
    int curIndex = MakeIndexFromHood(world, loc, rows, cols);
+   // printf("Loc: %d \n", loc);
+   // printf("index: %d \n", curIndex);
+   // printf("newValue: %d \n", ruleset[curIndex]);
+
    //do some other stuff here
    //CSC333 - PROJECT - CHANGE THIS line
    // so that newworld[loc] actually becomes
    // whathever the ruleset tells you.
-   newworld[loc] = world[loc];
+   // newworld[loc] = world[loc];
+   newworld[loc] = ruleset[curIndex];
 
    return;
 
@@ -124,15 +133,14 @@ void print2DWorld(char *world, int rows, int cols, int myid)
   printf("(%d):\n",myid);
   for (rownum = 0; rownum < rows ; rownum++) {
       for (colnum= 0; colnum < cols ; colnum++){
-
-  	printf("%d",world[rownum*cols + colnum]) ;
+  	      printf("%d",world[rownum*cols + colnum]) ;
       }
-  	printf("\n");
+  	  printf("\n");
 
       //if (world[i] != Nil){
-    //    if (world[i] == 1) printf("#");
-     //   else printf(" ");
-       //}
+      //  if (world[i] == 1) printf("#");
+      //  else printf(" ");
+      //}
     }
   printf("\n");
 }
@@ -172,13 +180,15 @@ would have index 101010101, and the rule would be found at index 341 (0x155) of 
 void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
 {
 
-  char *newworld= Make2DCellWorld(rows,cols);
+  // char *newworld= Make2DCellWorld(rows,cols);
+  char *newworld= calloc(rows*cols+1,sizeof(char));
 
   while(1)
     {
       int loc;
       print2DWorld(world, rows,cols,0);
       for (loc = 0; loc < rows*cols ; loc++){
+          printf("applying rule at %d \n", loc);
 	        Apply2DRuleAtLoc(world,newworld,loc,rows,cols,ruleset);
       }
 
@@ -189,5 +199,27 @@ void Run2DCellWorld(char *world, int rows, int cols, int myid, char *ruleset)
       world = newworld;
       newworld = oldworld;
     }
+  free(newworld);
+}
+
+void Run2DCellWorldOnce(char **world, int rows, int cols, int myid, char *ruleset)
+{
+
+  char *newworld= Make2DCellWorld(rows,cols);
+  int loc;
+  // print2DWorld(world, rows,cols,0);
+  for (loc = 0; loc < rows*cols ; loc++){
+      // printf("applying rule at %d \n", loc);
+      Apply2DRuleAtLoc(*world,newworld,loc,rows,cols,ruleset);
+  }
+
+  // print2DWorld(newworld, rows, cols, myid);
+
+  // the world becomes the new world
+  // and new world becomes the old world
+  // (this way we only have to allocate the array once)
+  char *oldworld = *world;
+  *world = newworld;
+  newworld = oldworld;
   free(newworld);
 }
