@@ -5,8 +5,9 @@
 #include <string.h>
 #include <stdbool.h>
 
-bool PRINT_EVERY_ITER = true;
-bool PRINT_AT_END = true;
+bool PRINT_EVERY_ITER = false;
+bool PRINT_AT_END = false;
+bool PRINT_TIMING = true;
 
 //to compile: make -f Makefile
 //to run: mpirun -np 4 ./mpicell2d
@@ -190,9 +191,13 @@ int main(int argc, char *argv[])
     if(my_rank == 0){
       print2DWorld(permutedWorld,worldsize,worldsize,my_rank);
       printf("duration: %f seconds \n", t2 -t1);
-      printf("t1 %f \n", t1);
-      printf("t2 %f \n", t2);
 
+
+    }
+  }
+  if (PRINT_TIMING){
+    if (my_rank == 0){
+      printf("duration: %f seconds \n", t2 -t1);
 
     }
   }

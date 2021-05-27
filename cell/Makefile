@@ -12,7 +12,5 @@ OBJ = mpicell2d.o CellAut.o 2DCellAut.o
 mpicell2d: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
-
-
 clean:
 	rm -f *.o *~
